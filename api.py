@@ -101,6 +101,63 @@ def link_image_to_product(client_id: str, client_secret: str, product_id: str, i
     response_relationship.raise_for_status()
 
 
+def create_flow(client_id: str, client_secret: str, name:str, description:str, fields:dict):
+    check_access_token(client_id, client_secret)
+    access_token = os.getenv('ACCESS_TOKEN')
+    headers = {'Authorization': access_token}
+    json_data = {
+        'data': {
+            'type': 'flow',
+            'name': name,
+            'slug': name,
+            'description': description,
+            'enabled': True,
+        },
+    }
+
+    response_create_flow = requests.post(
+        'https://api.moltin.com/v2/flows',
+        headers=headers,
+        json=json_data
+        )
+    response_create_flow.raise_for_status()
+    flow = response_create_flow.json()['data']
+    create_fields(client_id, client_secret, fields, flow)
+
+
+def create_fields(client_id: str, client_secret: str, fields: dict, flow: str):
+    check_access_token(client_id, client_secret)
+    access_token = os.getenv('ACCESS_TOKEN')
+    headers = {'Authorization': access_token}
+    for field_name, field_type in fields.items():
+        json_data = {
+            'data': {
+                'type': 'field',
+                'name': field_name,
+                'slug': field_name,
+                'field_type': field_type,
+                'description': field_name,
+                'required': False,
+                'enabled': False,
+                'relationships': {
+                    'flow': {
+                        'data': {
+                            'id': flow['id'],
+                            'type': 'flow'
+                        }
+                    }
+                }
+            }
+        }
+        print(json_data)
+        response_create_field = requests.post(
+            'https://api.moltin.com/v2/fields',
+            headers=headers,
+            json=json_data
+            )
+        response_create_field.raise_for_status()
+
+
 def get_products(client_id: str) -> dict:
     check_access_token(client_id)
     access_token = os.getenv('ACCESS_TOKEN')

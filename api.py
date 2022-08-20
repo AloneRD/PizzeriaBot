@@ -128,7 +128,7 @@ def create_flow(client_id: str, client_secret: str, name:str, description:str, f
 def create_fields(client_id: str, client_secret: str, fields: dict, flow: str):
     check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
-    headers = {'Authorization': access_token}
+    headers = {'Authorization': access_token,}
     for field_name, field_type in fields.items():
         json_data = {
             'data': {
@@ -149,13 +149,31 @@ def create_fields(client_id: str, client_secret: str, fields: dict, flow: str):
                 }
             }
         }
-        print(json_data)
         response_create_field = requests.post(
             'https://api.moltin.com/v2/fields',
             headers=headers,
             json=json_data
             )
         response_create_field.raise_for_status()
+
+
+def fill_fields(client_id: str, client_secret: str, data_items: list, flow_slug: str):
+    check_access_token(client_id, client_secret)
+    access_token = os.getenv('ACCESS_TOKEN')
+    headers = {'Authorization': access_token}
+    for data_item in data_items:
+        json_data = {
+            'data': {
+                'type': 'entry',
+                'Address': data_item['address']['full'],
+                'Alias': data_item['alias'],
+                'Longitude': float(data_item['coordinates']['lon']),
+                'Latitude': float(data_item['coordinates']['lat'])
+            }
+        }
+        print(json_data)
+        response_field_fill = requests.post(f'https://api.moltin.com/v2/flows/{flow_slug}/entries', headers=headers, json=json_data)
+        response_field_fill.raise_for_status()
 
 
 def get_products(client_id: str) -> dict:

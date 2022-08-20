@@ -3,7 +3,7 @@ import os
 
 from dotenv import load_dotenv
 
-from api import create_product, create_flow
+from api import create_product, create_flow, fill_fields
 
 
 def load_menu_to_cms(client_id: str, client_secret: str, menu: list):
@@ -29,13 +29,14 @@ def main():
         'Longitude': 'float',
         'Latitude': 'float'
     }
-    #create_flow(
-        client_id,
-        client_secret,
-        'Pizzeria',
-        'Information about pizzerias',
-        fields
-        )
+    # create_flow(
+    #     client_id,
+    #     client_secret,
+    #     'Pizzeria',
+    #     'Information about pizzerias',
+    #     fields
+    #     )
+    # fill_fields(client_id, client_secret, addresses, 'Pizzeria')
 
 
 if __name__ == '__main__':

@@ -176,8 +176,8 @@ def fill_fields(client_id: str, client_secret: str, data_items: list, flow_slug:
         response_field_fill.raise_for_status()
 
 
-def get_products(client_id: str) -> dict:
-    check_access_token(client_id)
+def get_products(client_id: str, client_secret: str) -> dict:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     response_products = requests.get(
@@ -189,8 +189,8 @@ def get_products(client_id: str) -> dict:
     return response_products.json()
 
 
-def get_product(client_id: str, id: str) -> dict:
-    check_access_token(client_id)
+def get_product(client_id: str, client_secret: str, id: str) -> dict:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     response_products = requests.get(
@@ -201,8 +201,8 @@ def get_product(client_id: str, id: str) -> dict:
     return response_products.json()
 
 
-def get_image_product(client_id: str, id_image: str) -> dict:
-    check_access_token(client_id)
+def get_image_product(client_id: str, client_secret: str, id_image: str) -> dict:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     response_products = requests.get(
@@ -213,8 +213,8 @@ def get_image_product(client_id: str, id_image: str) -> dict:
     return response_products.json()
 
 
-def add_product_cart(product: dict, client_id: str, quantity: int, cart_id: str) -> None:
-    check_access_token(client_id)
+def add_product_cart(product: dict, client_id: str, client_secret:str, quantity: int, cart_id: str) -> None:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     json_data = {
@@ -225,42 +225,55 @@ def add_product_cart(product: dict, client_id: str, quantity: int, cart_id: str)
         },
     }
     response_add_product_to_cart = requests.post(
-        f'https://api.moltin.com/v2/carts/{cart_id}/items',
+        f'https://api.moltin.com/v2/carts/{cart_id}_pizzeria/items',
         headers=headers,
         json=json_data
         )
+    print(response_add_product_to_cart.json())
     response_add_product_to_cart.raise_for_status()
 
 
-def remove_product_from_cart(cart_id: str, product_id: str, client_id: str) -> None:
-    check_access_token(client_id)
+def remove_product_from_cart(cart_id: str, product_id: str, client_id: str, client_secret:str) -> None:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     response_add_product_to_cart = requests.delete(
-        f'https://api.moltin.com/v2/carts/{cart_id}/items/{product_id}',
+        f'https://api.moltin.com/v2/carts/{cart_id}_pizzeria/items/{product_id}',
         headers=headers,
         )
     response_add_product_to_cart.raise_for_status()
 
 
-def get_cart(cart_id: str, client_id: str) -> dict:
-    check_access_token(client_id)
+def get_cart(cart_id: str, client_id: str, client_secret: str) -> dict:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     response_get_cart = requests.get(
-        f'https://api.moltin.com/v2/carts/{cart_id}/items',
+        f'https://api.moltin.com/v2/carts/{cart_id}_pizzeria/items',
         headers=headers
         )
     response_get_cart.raise_for_status()
     return response_get_cart.json()
 
 
-def get_cart_total(cart_id: str, client_id: str) -> str:
-    check_access_token(client_id)
+def remove_cart(cart_id: str, client_id: str, client_secret: str):
+    check_access_token(client_id, client_secret)
+    access_token = os.getenv('ACCESS_TOKEN')
+    headers = {'Authorization': access_token}
+    response_remove_cart = requests.delete(
+        f'https://api.moltin.com/v2/carts/{cart_id}_pizzeria/items',
+        headers=headers
+        )
+    print(response_remove_cart)
+    response_remove_cart.raise_for_status()
+
+
+def get_cart_total(cart_id: str, client_id: str, client_secret: str) -> str:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     response_get_cart = requests.get(
-        f'https://api.moltin.com/v2/carts/{cart_id}',
+        f'https://api.moltin.com/v2/carts/{cart_id}_pizzeria',
         headers=headers
         )
     response_get_cart.raise_for_status()
@@ -269,8 +282,8 @@ def get_cart_total(cart_id: str, client_id: str) -> str:
     return total_cart
 
 
-def create_customer(name: str, email: str, client_id: str) -> None:
-    check_access_token(client_id)
+def create_customer(name: str, email: str, client_id: str, client_secret:str) -> None:
+    check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
     json_data = {

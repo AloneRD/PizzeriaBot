@@ -1,3 +1,4 @@
+from lib2to3.pgen2.token import NUMBER
 import os
 import redis
 import re
@@ -15,6 +16,7 @@ _database = None
 
 BUTTON_CART = InlineKeyboardButton('Корзина', callback_data='cart')
 BUTTON_BACK = InlineKeyboardButton('Назад', callback_data='back')
+MENU_ITEMS_NUMBER = 8
 
 
 def generate_keyboard_for_handle_menu(products: list) -> list:
@@ -30,29 +32,80 @@ def start(bot, update, user_data, client_id, client_secret):
     Хэндлер для состояния START.
     """
     products = api.get_products(client_id, client_secret)['data']
+    pages_total_number = len(products)//MENU_ITEMS_NUMBER
     user_data['products'] = products
-    keyboard = generate_keyboard_for_handle_menu(products)
+    user_data['pages_total_number'] = pages_total_number
+    keyboard = generate_keyboard_for_handle_menu(products[:MENU_ITEMS_NUMBER])
+    keyboard.append(
+        [
+            InlineKeyboardButton(f'<1/{pages_total_number}>', callback_data='pages_total_number'),
+            InlineKeyboardButton('Вперед->', callback_data='next_page_2')
+            ]
+    )
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     update.message.reply_text(
         text='Добро пожаловать к нам в пиццерию!!',
         reply_markup=reply_markup
         )
-    return "HANDLE_DESCRIPTION"
+    return "HANDLE_MENU"
 
 
 def handle_menu(bot, update, user_data, client_id, client_secret):
+    user_reply = update.callback_query.data
+    products = user_data['products']
+    pages_total_number = user_data['pages_total_number']
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
+    if 'next_page' in user_reply:
+        page = int(re.search(r'next_page_(.*)', user_reply).group(1))
+        if page <= pages_total_number:
+            product_start = MENU_ITEMS_NUMBER*(page-1)
+            product_end = MENU_ITEMS_NUMBER*page
+            keyboard = generate_keyboard_for_handle_menu(
+                products[product_start:product_end]
+                )
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        '<-Назад',
+                        callback_data=f'previous_page_{page-1}'
+                        ),
+                    InlineKeyboardButton(
+                        f'<{page}/{pages_total_number}>',
+                        callback_data='pages_total_number'
+                        ),
+                    InlineKeyboardButton(
+                        'Вперед->',
+                        callback_data=f'next_page_{page+1}'
+                        )
+                ]
+            )
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            bot.edit_message_text(
+                'Меню',
+                reply_markup=reply_markup,
+                chat_id=chat_id,
+                message_id=message_id
+                )
+        return "HANDLE_MENU"
 
-    products = api.get_products(client_id, client_secret)['data']
-    user_data['products'] = products
-    keyboard = generate_keyboard_for_handle_menu(products)
-    keyboard.append([BUTTON_CART])
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    elif user_reply == 'back':
+        keyboard = generate_keyboard_for_handle_menu(products)
+        keyboard.append([BUTTON_CART])
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.callback_query.message.reply_text('Меню', reply_markup=reply_markup)
-    bot.delete_message(chat_id=chat_id, message_id=message_id)
+        update.callback_query.message.reply_text('Меню', reply_markup=reply_markup)
+        bot.delete_message(chat_id=chat_id, message_id=message_id)
+
+    # products = api.get_products(client_id, client_secret)['data']
+    # user_data['products'] = products
+    # keyboard = generate_keyboard_for_handle_menu(products)
+    # keyboard.append([BUTTON_CART])
+    # reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # update.callback_query.message.reply_text('Меню', reply_markup=reply_markup)
+    # bot.delete_message(chat_id=chat_id, message_id=message_id)
     return "HANDLE_DESCRIPTION"
 
 

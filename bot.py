@@ -57,30 +57,49 @@ def handle_menu(bot, update, user_data, client_id, client_secret):
     pages_total_number = user_data['pages_total_number']
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
+
     if 'next_page' in user_reply:
         page = int(re.search(r'next_page_(.*)', user_reply).group(1))
+        product_start = MENU_ITEMS_NUMBER*(page-1)
+        product_end = MENU_ITEMS_NUMBER*page
+
         if page <= pages_total_number:
-            product_start = MENU_ITEMS_NUMBER*(page-1)
-            product_end = MENU_ITEMS_NUMBER*page
-            keyboard = generate_keyboard_for_handle_menu(
-                products[product_start:product_end]
+            if page == pages_total_number:
+                keyboard = generate_keyboard_for_handle_menu(
+                    products[product_start:]
+                    )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            '<-Назад',
+                            callback_data=f'previous_page_{page-1}'
+                            ),
+                        InlineKeyboardButton(
+                            f'<{page}/{pages_total_number}>',
+                            callback_data='pages_total_number'
+                            ),
+                    ]
                 )
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        '<-Назад',
-                        callback_data=f'previous_page_{page-1}'
-                        ),
-                    InlineKeyboardButton(
-                        f'<{page}/{pages_total_number}>',
-                        callback_data='pages_total_number'
-                        ),
-                    InlineKeyboardButton(
-                        'Вперед->',
-                        callback_data=f'next_page_{page+1}'
-                        )
-                ]
-            )
+            else:
+                keyboard = generate_keyboard_for_handle_menu(
+                     products[product_start:product_end]
+                )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            '<-Назад',
+                            callback_data=f'previous_page_{page-1}'
+                            ),
+                        InlineKeyboardButton(
+                            f'<{page}/{pages_total_number}>',
+                            callback_data='pages_total_number'
+                            ),
+                        InlineKeyboardButton(
+                            'Вперед->',
+                            callback_data=f'next_page_{page+1}'
+                            )
+                    ]
+                )
             reply_markup = InlineKeyboardMarkup(keyboard)
             bot.edit_message_text(
                 'Меню',
@@ -89,30 +108,87 @@ def handle_menu(bot, update, user_data, client_id, client_secret):
                 message_id=message_id
                 )
         return "HANDLE_MENU"
+    elif 'previous_page' in user_reply:
+        page = int(re.search(r'previous_page_(.*)', user_reply).group(1))
+        product_start = MENU_ITEMS_NUMBER*(page-1)
+        product_end = MENU_ITEMS_NUMBER*page
 
-    elif user_reply == 'back':
-        keyboard = generate_keyboard_for_handle_menu(products)
+        if page >= 1:
+            if page == 1:
+                keyboard = generate_keyboard_for_handle_menu(
+                    products[:product_end]
+                    )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            f'<{page}/{pages_total_number}>',
+                            callback_data='pages_total_number'
+                            ),
+                        InlineKeyboardButton(
+                            'Вперед->',
+                            callback_data=f'next_page_{page+1}'
+                            )
+                    ]
+                )
+            else:
+                keyboard = generate_keyboard_for_handle_menu(
+                     products[product_start:product_end]
+                )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            '<-Назад',
+                            callback_data=f'previous_page_{page-1}'
+                            ),
+                        InlineKeyboardButton(
+                            f'<{page}/{pages_total_number}>',
+                            callback_data='pages_total_number'
+                            ),
+                        InlineKeyboardButton(
+                            'Вперед->',
+                            callback_data=f'next_page_{page+1}'
+                            )
+                    ]
+                )
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            bot.edit_message_text(
+                'Меню',
+                reply_markup=reply_markup,
+                chat_id=chat_id,
+                message_id=message_id
+                )
+        return "HANDLE_MENU"
+    elif user_reply == 'back' or user_reply == 'handle_menu':
+        keyboard = generate_keyboard_for_handle_menu(products[:MENU_ITEMS_NUMBER])
+        keyboard.append(
+            [
+                InlineKeyboardButton(f'<1/{pages_total_number}>', callback_data='pages_total_number'),
+                InlineKeyboardButton('Вперед->', callback_data='next_page_2')
+                ]
+        )
         keyboard.append([BUTTON_CART])
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        update.callback_query.message.reply_text('Меню', reply_markup=reply_markup)
+        update.callback_query.message.reply_text(
+            'Меню',
+            reply_markup=reply_markup
+            )
         bot.delete_message(chat_id=chat_id, message_id=message_id)
+        return "HANDLE_MENU"
+    elif user_reply == 'cart':
+        view_cart(bot, update, user_data, client_id, client_secret)
+        return 'CART'
 
-    # products = api.get_products(client_id, client_secret)['data']
-    # user_data['products'] = products
-    # keyboard = generate_keyboard_for_handle_menu(products)
-    # keyboard.append([BUTTON_CART])
-    # reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # update.callback_query.message.reply_text('Меню', reply_markup=reply_markup)
-    # bot.delete_message(chat_id=chat_id, message_id=message_id)
+    handle_description(bot, update, user_data, client_id, client_secret)
     return "HANDLE_DESCRIPTION"
+    #handle_description(bot, update, user_data, client_id, client_secret)
 
 
 def handle_description(bot, update, user_data, client_id, client_secret):
     message_id = update.callback_query.message.message_id
     chat_id = update.callback_query.message.chat_id
     user_reply = update.callback_query.data
+
     if user_reply == 'add_cart':
         api.add_product_cart(
             user_data['product'],
@@ -127,7 +203,7 @@ def handle_description(bot, update, user_data, client_id, client_secret):
         return 'CART'
     elif user_reply == 'back':
         handle_menu(bot, update, user_data, client_id, client_secret)
-        return "HANDLE_DESCRIPTION"
+        return 'HANDLE_MENU'
     product_id = user_reply
     response_get_product = api.get_product(client_id, client_secret, product_id)
     product = response_get_product['data']
@@ -183,9 +259,8 @@ def generate_cart(chat_id, client_id, client_secret):
                     {product_price} руб.
 
                     В корзине {product["quantity"]} пицц на сумму {product_price_cart}
+                    '''
 
-                    Общая сумма заказа: {total_price_cart}
-                       '''
         message_block.append(dedent(message))
         product_delete_button = [
             InlineKeyboardButton(f'Убрать из корзины {product["name"]}', callback_data=f'delete_{product["id"]}')
@@ -194,6 +269,7 @@ def generate_cart(chat_id, client_id, client_secret):
     if not message_block:
         message_block = ["Ваша корзина пуста"]
         api.remove_cart(chat_id, client_id, client_secret)
+    message_block.append(f'Общая сумма заказа: {total_price_cart}')
     reply_markup = InlineKeyboardMarkup(keyboard)
     return message_block, reply_markup
 
@@ -205,7 +281,7 @@ def view_cart(bot, update, user_data, client_id, client_secret):
 
     if user_reply == 'back' or user_reply == 'handle_menu':
         handle_menu(bot, update, user_data, client_id, client_secret)
-        return "HANDLE_DESCRIPTION"
+        return 'HANDLE_MENU'
     elif 'delete' in user_reply:
         product_id = re.search(r'delete_(.*)', user_reply).group(1)
         api.remove_product_from_cart(chat_id, product_id, client_id, client_secret)

@@ -7,6 +7,7 @@ import api
 from dotenv import load_dotenv
 from functools import partial
 from textwrap import dedent
+from geo_distance import calculate_distances
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -22,7 +23,10 @@ MENU_ITEMS_NUMBER = 8
 def generate_keyboard_for_handle_menu(products: list) -> list:
     keyboard = []
     for product in products:
-        button = [InlineKeyboardButton(product['name'], callback_data=product['id'])]
+        button = [
+            InlineKeyboardButton(product['name'],
+            callback_data=product['id'])
+            ]
         keyboard.append(button)
     return keyboard
 
@@ -35,7 +39,9 @@ def start(bot, update, user_data, client_id, client_secret):
     pages_total_number = len(products)//MENU_ITEMS_NUMBER
     user_data['products'] = products
     user_data['pages_total_number'] = pages_total_number
-    keyboard = generate_keyboard_for_handle_menu(products[:MENU_ITEMS_NUMBER])
+    keyboard = generate_keyboard_for_handle_menu(
+        products[:MENU_ITEMS_NUMBER]
+        )
     keyboard.append(
         [
             InlineKeyboardButton(f'<1/{pages_total_number}>', callback_data='pages_total_number'),
@@ -181,7 +187,6 @@ def handle_menu(bot, update, user_data, client_id, client_secret):
 
     handle_description(bot, update, user_data, client_id, client_secret)
     return "HANDLE_DESCRIPTION"
-    #handle_description(bot, update, user_data, client_id, client_secret)
 
 
 def handle_description(bot, update, user_data, client_id, client_secret):
@@ -310,23 +315,52 @@ def view_cart(bot, update, user_data, client_id, client_secret):
     return "CART"
 
 
-def waiting_email(bot, update, user_data, client_id):
+def waiting_email(bot, update, user_data, client_id, client_secret):
     email = update.message.text
+    chat_id = update.message.chat_id
+    api.create_customer(str(chat_id), email, client_id, client_secret)
+    bot.send_message(
+        chat_id=chat_id,
+        text='Хорошо, пришлите нам ваш адрес текстом или геолокацию',
+        )
+    return 'WAITING_ADDRESS'
+
+
+def waiting_address(bot, update, user_data, geocoder_token):
+    message_text = update.message.text
     chat_id = update.message.chat_id
     keyboard = [
         [InlineKeyboardButton('В меню', callback_data='handle_menu')]
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    api.create_customer(str(chat_id), email, client_id)
+    if not message_text:
+        if update.edited_message:
+            message = update.edited_message
+        else:
+            message = update.message
+        delivery_coordinates = (message.location.latitude, message.location.longitude)
+        bot.send_message(
+        chat_id=chat_id,
+        text=f'{delivery_coordinates} коррдинаты',
+        reply_markup=reply_markup
+        )
+        return 'HANDLE_MENU'
+    delivery_coordinates = calculate_distances(geocoder_token, message_text)
+    if not delivery_coordinates:
+        bot.send_message(
+            chat_id=chat_id,
+            text='Не понял Вас. Проверте адресс и повторите ввод',
+        )
+        return 'WAITING_ADDRESS'
     bot.send_message(
         chat_id=chat_id,
-        text=f'{email} сохранен',
+        text=f'{delivery_coordinates} коррдинаты',
         reply_markup=reply_markup
         )
     return 'HANDLE_MENU'
 
 
-def handle_users_reply(bot, update, user_data, client_id, client_secret):
+def handle_users_reply(bot, update, user_data, client_id, client_secret, geocoder_token=None):
     """
     Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
     Эта функция запускается в ответ на эти действия пользователя:
@@ -379,6 +413,10 @@ def handle_users_reply(bot, update, user_data, client_id, client_secret):
             waiting_email,
             client_id=client_id,
             client_secret=client_secret
+            ),
+        'WAITING_ADDRESS': partial(
+            waiting_address,
+            geocoder_token=geocoder_token
             )
     }
     state_handler = states_functions[user_state]
@@ -414,27 +452,53 @@ def main():
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     token = os.getenv("TG_TOKEN")
+    geocoder_token = os.getenv("YANDEX_GEOCODER_TOKEN")
 
     updater = Updater(token)
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(
         CallbackQueryHandler(
-            partial(handle_users_reply, client_id=client_id, client_secret=client_secret),
+            partial(
+                handle_users_reply,
+                client_id=client_id,
+                client_secret=client_secret
+                ),
             pass_user_data=True
             )
         )
     dispatcher.add_handler(
         MessageHandler(
             Filters.text,
-            partial(handle_users_reply, client_id=client_id, client_secret=client_secret),
+            partial(
+                handle_users_reply,
+                client_id=client_id,
+                client_secret=client_secret,
+                geocoder_token=geocoder_token
+                ),
+            pass_user_data=True
+            )
+        )
+    dispatcher.add_handler(
+        MessageHandler(
+            Filters.location,
+            partial(
+                handle_users_reply,
+                client_id=client_id,
+                client_secret=client_secret,
+                geocoder_token=geocoder_token
+                ),
             pass_user_data=True
             )
         )
     dispatcher.add_handler(
         CommandHandler(
             'start',
-            partial(handle_users_reply, client_id=client_id, client_secret=client_secret),
+            partial(
+                handle_users_reply,
+                client_id=client_id,
+                client_secret=client_secret
+                ),
             pass_user_data=True
             )
         )

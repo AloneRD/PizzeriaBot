@@ -14,7 +14,10 @@ def get_access_token(client_id: str, client_secret: str) -> str:
         )
     response_token_request.raise_for_status()
     access_token = response_token_request.json()
-    os.environ.setdefault('MOLTIN_TOKEN_EXPIRES_TIME', str(access_token['expires']))
+    os.environ.setdefault(
+        'MOLTIN_TOKEN_EXPIRES_TIME',
+        str(access_token['expires'])
+        )
     os.environ.setdefault('ACCESS_TOKEN', access_token['access_token'])
 
 
@@ -101,7 +104,7 @@ def link_image_to_product(client_id: str, client_secret: str, product_id: str, i
     response_relationship.raise_for_status()
 
 
-def create_flow(client_id: str, client_secret: str, name:str, description:str, fields:dict):
+def create_flow(client_id: str, client_secret: str, name: str, description: str, fields: dict):
     check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}
@@ -128,7 +131,7 @@ def create_flow(client_id: str, client_secret: str, name:str, description:str, f
 def create_fields(client_id: str, client_secret: str, fields: dict, flow: str):
     check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
-    headers = {'Authorization': access_token,}
+    headers = {'Authorization': access_token}
     for field_name, field_type in fields.items():
         json_data = {
             'data': {
@@ -172,7 +175,11 @@ def fill_fields(client_id: str, client_secret: str, data_items: list, flow_slug:
             }
         }
         print(json_data)
-        response_field_fill = requests.post(f'https://api.moltin.com/v2/flows/{flow_slug}/entries', headers=headers, json=json_data)
+        response_field_fill = requests.post(
+            f'https://api.moltin.com/v2/flows/{flow_slug}/entries',
+            headers=headers,
+            json=json_data
+            )
         response_field_fill.raise_for_status()
 
 
@@ -213,7 +220,7 @@ def get_image_product(client_id: str, client_secret: str, id_image: str) -> dict
     return response_products.json()
 
 
-def add_product_cart(product: dict, client_id: str, client_secret:str, quantity: int, cart_id: str) -> None:
+def add_product_cart(product: dict, client_id: str, client_secret: str, quantity: int, cart_id: str) -> None:
     check_access_token(client_id, client_secret)
     access_token = os.getenv('ACCESS_TOKEN')
     headers = {'Authorization': access_token}

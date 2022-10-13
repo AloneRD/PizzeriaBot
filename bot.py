@@ -7,7 +7,7 @@ import api
 from dotenv import load_dotenv
 from functools import partial
 from textwrap import dedent
-from geo_distance import calculate_distances
+from geo_distance import calculate_distances, CalculateDistanceError
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -326,35 +326,73 @@ def waiting_email(bot, update, user_data, client_id, client_secret):
     return 'WAITING_ADDRESS'
 
 
-def waiting_address(bot, update, user_data, geocoder_token):
-    message_text = update.message.text
+def waiting_address(bot, update, user_data, geocoder_token, client_id, client_secret):
+    delivery_address = update.message.text
     chat_id = update.message.chat_id
     keyboard = [
         [InlineKeyboardButton('В меню', callback_data='handle_menu')]
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    if not message_text:
+    if not delivery_address:
         if update.edited_message:
             message = update.edited_message
         else:
             message = update.message
-        delivery_coordinates = (message.location.latitude, message.location.longitude)
-        bot.send_message(
-        chat_id=chat_id,
-        text=f'{delivery_coordinates} коррдинаты',
-        reply_markup=reply_markup
+        delivery_address = (
+            message.location.latitude,
+            message.location.longitude
+            )
+    pizzerias = api.get_pizzerias(
+        'Pizzeria',
+        client_id,
+        client_secret
         )
-        return 'HANDLE_MENU'
-    delivery_coordinates = calculate_distances(geocoder_token, message_text)
-    if not delivery_coordinates:
+    pizzerias_addresses = [
+        {
+            'coordinates': (pizzeria['Longitude'], pizzeria['Latitude']),
+            'address': pizzeria['Address']
+            }
+        for pizzeria in pizzerias
+        ]
+    try:
+        nearest_pizzeria = calculate_distances(
+            geocoder_token,
+            delivery_address,
+            pizzerias_addresses
+            )
+        if float(nearest_pizzeria['distance']) <= 0.5:
+            message = f'''
+            Может, заберете пиццу в нашей пиццеррии неподалеко?
+            Она всего в {nearest_pizzeria['distance']} км от вас!
+            Вот ее адрес: {nearest_pizzeria['address']}.
+
+            А можем и бесплатно доставит, нам не сложно
+            '''
+        elif float(nearest_pizzeria['distance']) <= 5.0:
+            message = '''
+            Похлже придется ехать до вас на самокате.
+            Доставка будет стоить 100 рублей.
+            Доставляем или самовывоз?
+            '''
+        elif float(nearest_pizzeria['distance']) <= 20.0:
+            message = '''
+            Доставка до вас будет стоить 300 рублей. Доставляем или самовывоз?
+            '''
+        else:
+            message = '''
+            Простите, мы не можем осуществить до вас доставку.
+            Вы можете забрать пиццу самостоятельно
+            '''
+    except CalculateDistanceError:
         bot.send_message(
             chat_id=chat_id,
             text='Не понял Вас. Проверте адресс и повторите ввод',
         )
         return 'WAITING_ADDRESS'
+
     bot.send_message(
         chat_id=chat_id,
-        text=f'{delivery_coordinates} коррдинаты',
+        text=dedent(message),
         reply_markup=reply_markup
         )
     return 'HANDLE_MENU'
@@ -362,16 +400,21 @@ def waiting_address(bot, update, user_data, geocoder_token):
 
 def handle_users_reply(bot, update, user_data, client_id, client_secret, geocoder_token=None):
     """
-    Функция, которая запускается при любом сообщении от пользователя и решает как его обработать.
+    Функция, которая запускается при любом сообщении от пользователя и решает
+    как его обработать.
     Эта функция запускается в ответ на эти действия пользователя:
         * Нажатие на inline-кнопку в боте
         * Отправка сообщения боту
         * Отправка команды боту
-    Она получает стейт пользователя из базы данных и запускает соответствующую функцию-обработчик (хэндлер).
-    Функция-обработчик возвращает следующее состояние, которое записывается в базу данных.
-    Если пользователь только начал пользоваться ботом, Telegram форсит его написать "/start",
+    Она получает стейт пользователя из базы данных и запускает соответствующую
+    функцию-обработчик (хэндлер).
+    Функция-обработчик возвращает следующее состояние, которое записывается в
+    базу данных.
+    Если пользователь только начал пользоваться ботом, Telegram форсит его
+    написать "/start",
     поэтому по этой фразе выставляется стартовое состояние.
-    Если пользователь захочет начать общение с ботом заново, он также может воспользоваться этой командой.
+    Если пользователь захочет начать общение с ботом заново, он также может
+    воспользоваться этой командой.
     """
 
     db = get_database_connection()
@@ -416,7 +459,9 @@ def handle_users_reply(bot, update, user_data, client_id, client_secret, geocode
             ),
         'WAITING_ADDRESS': partial(
             waiting_address,
-            geocoder_token=geocoder_token
+            geocoder_token=geocoder_token,
+            client_id=client_id,
+            client_secret=client_secret
             )
     }
     state_handler = states_functions[user_state]

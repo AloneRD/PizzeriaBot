@@ -306,3 +306,16 @@ def create_customer(name: str, email: str, client_id: str, client_secret:str) ->
         json=json_data
         )
     response_create_customer.raise_for_status()
+
+
+def get_pizzerias(slug: str, client_id: str, client_secret: str) -> list:
+    check_access_token(client_id, client_secret)
+    access_token = os.getenv('ACCESS_TOKEN')
+    headers = {'Authorization': access_token}
+    response_get_cart = requests.get(
+        f'https://api.moltin.com/v2/flows/{slug}/entries',
+        headers=headers
+        )
+    response_get_cart.raise_for_status()
+    pizzerias = response_get_cart.json()['data']
+    return pizzerias

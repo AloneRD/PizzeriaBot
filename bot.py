@@ -1,4 +1,3 @@
-from lib2to3.pgen2.token import NUMBER
 import os
 import redis
 import re
@@ -24,9 +23,11 @@ def generate_keyboard_for_handle_menu(products: list) -> list:
     keyboard = []
     for product in products:
         button = [
-            InlineKeyboardButton(product['name'],
-            callback_data=product['id'])
-            ]
+            InlineKeyboardButton(
+                product['name'],
+                callback_data=product['id']
+            )
+        ]
         keyboard.append(button)
     return keyboard
 
@@ -44,7 +45,10 @@ def start(bot, update, user_data, client_id, client_secret):
         )
     keyboard.append(
         [
-            InlineKeyboardButton(f'<1/{pages_total_number}>', callback_data='pages_total_number'),
+            InlineKeyboardButton(
+                f'<1/{pages_total_number}>',
+                callback_data='pages_total_number'
+                ),
             InlineKeyboardButton('Вперед->', callback_data='next_page_2')
             ]
     )
@@ -168,7 +172,10 @@ def handle_menu(bot, update, user_data, client_id, client_secret):
         keyboard = generate_keyboard_for_handle_menu(products[:MENU_ITEMS_NUMBER])
         keyboard.append(
             [
-                InlineKeyboardButton(f'<1/{pages_total_number}>', callback_data='pages_total_number'),
+                InlineKeyboardButton(
+                    f'<1/{pages_total_number}>',
+                    callback_data='pages_total_number'
+                    ),
                 InlineKeyboardButton('Вперед->', callback_data='next_page_2')
                 ]
         )
@@ -210,7 +217,11 @@ def handle_description(bot, update, user_data, client_id, client_secret):
         handle_menu(bot, update, user_data, client_id, client_secret)
         return 'HANDLE_MENU'
     product_id = user_reply
-    response_get_product = api.get_product(client_id, client_secret, product_id)
+    response_get_product = api.get_product(
+        client_id,
+        client_secret,
+        product_id
+        )
     product = response_get_product['data']
     user_data['product'] = product
 
@@ -263,12 +274,16 @@ def generate_cart(chat_id, client_id, client_secret):
                     {product["description"]}
                     {product_price} руб.
 
-                    В корзине {product["quantity"]} пицц на сумму {product_price_cart}
+                    В корзине {product["quantity"]} пицц на
+                    сумму {product_price_cart}
                     '''
 
         message_block.append(dedent(message))
         product_delete_button = [
-            InlineKeyboardButton(f'Убрать из корзины {product["name"]}', callback_data=f'delete_{product["id"]}')
+            InlineKeyboardButton(
+                f'Убрать из корзины {product["name"]}',
+                callback_data=f'delete_{product["id"]}'
+                )
             ]
         keyboard.append(product_delete_button)
     if not message_block:
@@ -289,8 +304,17 @@ def view_cart(bot, update, user_data, client_id, client_secret):
         return 'HANDLE_MENU'
     elif 'delete' in user_reply:
         product_id = re.search(r'delete_(.*)', user_reply).group(1)
-        api.remove_product_from_cart(chat_id, product_id, client_id, client_secret)
-        message_block, reply_markup = generate_cart(chat_id, client_id, client_secret)
+        api.remove_product_from_cart(
+            chat_id,
+            product_id,
+            client_id,
+            client_secret
+            )
+        message_block, reply_markup = generate_cart(
+            chat_id,
+            client_id,
+            client_secret
+            )
         bot.send_message(
             chat_id=chat_id,
             text='\n'.join(message_block),
@@ -305,7 +329,11 @@ def view_cart(bot, update, user_data, client_id, client_secret):
             )
         return "WAITING_EMAIL"
 
-    message_block, reply_markup = generate_cart(chat_id, client_id, client_secret)
+    message_block, reply_markup = generate_cart(
+        chat_id,
+        client_id,
+        client_secret
+        )
     bot.send_message(
         chat_id=chat_id,
         text='\n'.join(message_block),
@@ -330,7 +358,8 @@ def waiting_address(bot, update, user_data, geocoder_token, client_id, client_se
     delivery_address = update.message.text
     chat_id = update.message.chat_id
     keyboard = [
-        [InlineKeyboardButton('В меню', callback_data='handle_menu')]
+        [InlineKeyboardButton('Самовывоз', callback_data='pickup')],
+        [InlineKeyboardButton('Доставка', callback_data='delivery')]
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if not delivery_address:
@@ -350,16 +379,19 @@ def waiting_address(bot, update, user_data, geocoder_token, client_id, client_se
     pizzerias_addresses = [
         {
             'coordinates': (pizzeria['Longitude'], pizzeria['Latitude']),
-            'address': pizzeria['Address']
+            'address': pizzeria['Address'],
+            'courier_id': pizzeria['courier']
             }
         for pizzeria in pizzerias
         ]
     try:
-        nearest_pizzeria = calculate_distances(
+        delivery_coordinates, nearest_pizzeria = calculate_distances(
             geocoder_token,
             delivery_address,
             pizzerias_addresses
-            )
+        )
+        user_data['nearest_pizzeria'] = nearest_pizzeria
+        user_data['delivery_coordinates'] = delivery_coordinates
         if float(nearest_pizzeria['distance']) <= 0.5:
             message = f'''
             Может, заберете пиццу в нашей пиццеррии неподалеко?
@@ -383,6 +415,7 @@ def waiting_address(bot, update, user_data, geocoder_token, client_id, client_se
             Простите, мы не можем осуществить до вас доставку.
             Вы можете забрать пиццу самостоятельно
             '''
+            keyboard.pop(1)
     except CalculateDistanceError:
         bot.send_message(
             chat_id=chat_id,
@@ -395,10 +428,48 @@ def waiting_address(bot, update, user_data, geocoder_token, client_id, client_se
         text=dedent(message),
         reply_markup=reply_markup
         )
+    return 'DELIVERY_METHOD'
+
+
+def choice_delivery_method(bot, update, user_data, job_queue, client_id, client_secret):
+    user_reply = update.callback_query.data
+    chat_id = update.callback_query.message.chat_id
+
+    keyboard = [
+        [InlineKeyboardButton('В меню', callback_data='handle_menu')],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if user_reply == 'pickup':
+        message = f"Ждем Вас в нашей пицерри. Адресс:\
+                    {user_data['nearest_pizzeria']['address']}"
+        bot.send_message(
+            chat_id=chat_id,
+            text=dedent(message),
+            reply_markup=reply_markup
+        )
+    if user_reply == 'delivery':
+        courier_id = user_data['nearest_pizzeria']['courier_id']
+        lon, lat = user_data['delivery_coordinates']
+        bot.send_location(
+            chat_id=courier_id,
+            latitude=lat,
+            longitude=lon
+        )
+        job_queue.run_once(callback_alarm, 60, context=chat_id)
+
     return 'HANDLE_MENU'
 
 
-def handle_users_reply(bot, update, user_data, client_id, client_secret, geocoder_token=None):
+def callback_alarm(bot, job):
+    bot.send_message(
+        chat_id=job.context,
+        text=('Приятного аппетита!. В случаи если пицца не'
+              'доставленна обратитесь в техподдержку')
+    )
+
+
+def handle_users_reply(bot, update, user_data, job_queue, client_id, client_secret, geocoder_token=None):
     """
     Функция, которая запускается при любом сообщении от пользователя и решает
     как его обработать.
@@ -462,6 +533,12 @@ def handle_users_reply(bot, update, user_data, client_id, client_secret, geocode
             geocoder_token=geocoder_token,
             client_id=client_id,
             client_secret=client_secret
+            ),
+        'DELIVERY_METHOD': partial(
+            choice_delivery_method,
+            job_queue=job_queue,
+            client_id=client_id,
+            client_secret=client_secret
             )
     }
     state_handler = states_functions[user_state]
@@ -477,7 +554,8 @@ def handle_users_reply(bot, update, user_data, client_id, client_secret, geocode
 
 def get_database_connection():
     """
-    Возвращает конекшн с базой данных Redis, либо создаёт новый, если он ещё не создан.
+    Возвращает конекшн с базой данных Redis,
+    либо создаёт новый, если он ещё не создан.
     """
     global _database
     if _database is None:
@@ -509,7 +587,8 @@ def main():
                 client_id=client_id,
                 client_secret=client_secret
                 ),
-            pass_user_data=True
+            pass_user_data=True,
+            pass_job_queue=True
             )
         )
     dispatcher.add_handler(
@@ -521,7 +600,8 @@ def main():
                 client_secret=client_secret,
                 geocoder_token=geocoder_token
                 ),
-            pass_user_data=True
+            pass_user_data=True,
+            pass_job_queue=True
             )
         )
     dispatcher.add_handler(
@@ -533,7 +613,8 @@ def main():
                 client_secret=client_secret,
                 geocoder_token=geocoder_token
                 ),
-            pass_user_data=True
+            pass_user_data=True,
+            pass_job_queue=True
             )
         )
     dispatcher.add_handler(
@@ -544,7 +625,8 @@ def main():
                 client_id=client_id,
                 client_secret=client_secret
                 ),
-            pass_user_data=True
+            pass_user_data=True,
+            pass_job_queue=True
             )
         )
 

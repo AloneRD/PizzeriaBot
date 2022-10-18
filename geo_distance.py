@@ -34,7 +34,8 @@ def calculate_distances(token, addresses, pizzerias_addresses):
         elif float(nearest_pizzeria['distance']) > float(pizzeria_distance):
             nearest_pizzeria['distance'] = pizzeria_distance
             nearest_pizzeria['address'] = pizzeria['address']
-    return nearest_pizzeria
+            nearest_pizzeria['courier_id'] = pizzeria['courier_id']
+    return delivery_coordinates, nearest_pizzeria
 
 
 def fetch_coordinates(apikey, address):

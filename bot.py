@@ -9,7 +9,7 @@ from textwrap import dedent
 from geo_distance import calculate_distances, CalculateDistanceError
 
 from telegram.ext import Filters, Updater
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 _database = None
@@ -400,16 +400,19 @@ def waiting_address(bot, update, user_data, geocoder_token, client_id, client_se
 
             А можем и бесплатно доставит, нам не сложно
             '''
+            user_data['delivery_price'] = 0
         elif float(nearest_pizzeria['distance']) <= 5.0:
             message = '''
             Похлже придется ехать до вас на самокате.
             Доставка будет стоить 100 рублей.
             Доставляем или самовывоз?
             '''
+            user_data['delivery_price'] = 100
         elif float(nearest_pizzeria['distance']) <= 20.0:
             message = '''
             Доставка до вас будет стоить 300 рублей. Доставляем или самовывоз?
             '''
+            user_data['delivery_price'] = 300
         else:
             message = '''
             Простите, мы не можем осуществить до вас доставку.
@@ -436,7 +439,7 @@ def choice_delivery_method(bot, update, user_data, job_queue, client_id, client_
     chat_id = update.callback_query.message.chat_id
 
     keyboard = [
-        [InlineKeyboardButton('В меню', callback_data='handle_menu')],
+        [InlineKeyboardButton('Оплатить', callback_data='pay')],
         ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -447,18 +450,46 @@ def choice_delivery_method(bot, update, user_data, job_queue, client_id, client_
             chat_id=chat_id,
             text=dedent(message),
             reply_markup=reply_markup
-        )
+            )
+        return 'HANDLE_MENU'
     if user_reply == 'delivery':
         courier_id = user_data['nearest_pizzeria']['courier_id']
         lon, lat = user_data['delivery_coordinates']
+        keyboard = [
+            [InlineKeyboardButton('Оплатить', callback_data='pay')],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         bot.send_location(
             chat_id=courier_id,
             latitude=lat,
             longitude=lon
-        )
+            )
+        message_block = generate_cart(
+            chat_id,
+            client_id,
+            client_secret
+            )
+        delivery_price = user_data['delivery_price']
+        cart_price = re.match(
+            r'(.*) руб',
+            api.get_cart_total(chat_id, client_id, client_secret)
+            ).group(1)
+        total_price = int(cart_price) + int(delivery_price)
+        user_data['total_price'] = total_price
+        message_block[0].append(
+            (f"Стоимость доставки {delivery_price} руб.\n"
+             f"К оплате {total_price} руб.")
+            )
+
+        bot.send_message(
+            chat_id=chat_id,
+            text='\n'.join(message_block[0]),
+            reply_markup=reply_markup
+            )
+
         job_queue.run_once(callback_alarm, 60, context=chat_id)
 
-    return 'HANDLE_MENU'
+    return 'WAINING_PAY'
 
 
 def callback_alarm(bot, job):
@@ -469,7 +500,51 @@ def callback_alarm(bot, job):
     )
 
 
-def handle_users_reply(bot, update, user_data, job_queue, client_id, client_secret, geocoder_token=None):
+def pay(bot, update, user_data, job_queue, provider_pay_token, client_id, client_secret):
+    chat_id = update.callback_query.message.chat_id
+    message_id = update.callback_query.message.message_id
+
+    prices = [LabeledPrice("Test", user_data['total_price']*100)]
+    currency = "RUB"
+    title = "Order payment"
+    description = f"User order payment {chat_id}"
+    payload = f"Payload - {chat_id}"
+    start_parameter = "test-payment"
+
+    keyboard = [
+            [InlineKeyboardButton('Оплатить', callback_data='pay')],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    bot.sendInvoice(
+        chat_id,
+        title,
+        description,
+        payload,
+        provider_pay_token,
+        start_parameter,
+        currency,
+        prices,
+        )
+
+    bot.delete_message(chat_id=chat_id, message_id=message_id)
+    bot.send_message(
+        chat_id=chat_id,
+        text=('Приятного аппетита!. В случаи если пицца не'
+              'доставленна обратитесь в техподдержку'),
+        reply_markup=reply_markup
+    )
+    print("Оплачено")
+    return "HANDLE_MENU"
+
+
+def successful_payment_callback(bot, update):
+    # do something after successful receive of payment?
+    update.message.reply_text("Thank you for your payment!")
+
+
+def handle_users_reply(bot, update, user_data, job_queue, client_id, client_secret, provider_pay_token, geocoder_token=None):
+
     """
     Функция, которая запускается при любом сообщении от пользователя и решает
     как его обработать.
@@ -501,7 +576,6 @@ def handle_users_reply(bot, update, user_data, job_queue, client_id, client_secr
         user_state = 'START'
     else:
         user_state = db.get(chat_id).decode("utf-8")
-
     states_functions = {
         'START': partial(
             start,
@@ -539,6 +613,13 @@ def handle_users_reply(bot, update, user_data, job_queue, client_id, client_secr
             job_queue=job_queue,
             client_id=client_id,
             client_secret=client_secret
+            ),
+        'WAINING_PAY': partial(
+            pay,
+            job_queue=job_queue,
+            client_id=client_id,
+            client_secret=client_secret,
+            provider_pay_token=provider_pay_token
             )
     }
     state_handler = states_functions[user_state]
@@ -575,6 +656,7 @@ def main():
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     token = os.getenv("TG_TOKEN")
+    provider_pay_token = os.getenv("PROVIDER_PAY_TOKEN")
     geocoder_token = os.getenv("YANDEX_GEOCODER_TOKEN")
 
     updater = Updater(token)
@@ -585,7 +667,8 @@ def main():
             partial(
                 handle_users_reply,
                 client_id=client_id,
-                client_secret=client_secret
+                client_secret=client_secret,
+                provider_pay_token=provider_pay_token
                 ),
             pass_user_data=True,
             pass_job_queue=True
@@ -598,7 +681,8 @@ def main():
                 handle_users_reply,
                 client_id=client_id,
                 client_secret=client_secret,
-                geocoder_token=geocoder_token
+                geocoder_token=geocoder_token,
+                provider_pay_token=provider_pay_token
                 ),
             pass_user_data=True,
             pass_job_queue=True
@@ -611,7 +695,8 @@ def main():
                 handle_users_reply,
                 client_id=client_id,
                 client_secret=client_secret,
-                geocoder_token=geocoder_token
+                geocoder_token=geocoder_token,
+                provider_pay_token=provider_pay_token
                 ),
             pass_user_data=True,
             pass_job_queue=True
@@ -623,7 +708,8 @@ def main():
             partial(
                 handle_users_reply,
                 client_id=client_id,
-                client_secret=client_secret
+                client_secret=client_secret,
+                provider_pay_token=provider_pay_token
                 ),
             pass_user_data=True,
             pass_job_queue=True

@@ -10,7 +10,7 @@ from geo_distance import calculate_distances, CalculateDistanceError
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
-from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
+from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, PreCheckoutQueryHandler
 
 _database = None
 
@@ -508,13 +508,9 @@ def pay(bot, update, user_data, job_queue, provider_pay_token, client_id, client
     currency = "RUB"
     title = "Order payment"
     description = f"User order payment {chat_id}"
-    payload = f"Payload - {chat_id}"
+    payload = f"Custom-Payload"
     start_parameter = "test-payment"
 
-    keyboard = [
-            [InlineKeyboardButton('Оплатить', callback_data='pay')],
-        ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     bot.sendInvoice(
         chat_id,
@@ -528,14 +524,19 @@ def pay(bot, update, user_data, job_queue, provider_pay_token, client_id, client
         )
 
     bot.delete_message(chat_id=chat_id, message_id=message_id)
-    bot.send_message(
-        chat_id=chat_id,
-        text=('Приятного аппетита!. В случаи если пицца не'
-              'доставленна обратитесь в техподдержку'),
-        reply_markup=reply_markup
-    )
-    print("Оплачено")
     return "HANDLE_MENU"
+
+
+def precheckout_callback(bot, update):
+    query = update.pre_checkout_query
+    # check the payload, is this from your bot?
+    print(query.invoice_payload)
+    if query.invoice_payload != 'Custom-Payload':
+        # answer False pre_checkout_query
+        bot.answer_pre_checkout_query(pre_checkout_query_id=query.id, ok=False,
+                                      error_message="Something went wrong...")
+    else:
+        bot.answer_pre_checkout_query(pre_checkout_query_id=query.id, ok=True)
 
 
 def successful_payment_callback(bot, update):
@@ -713,6 +714,13 @@ def main():
                 ),
             pass_user_data=True,
             pass_job_queue=True
+            )
+        )
+    dispatcher.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    dispatcher.add_handler(
+        MessageHandler(
+            Filters.successful_payment,
+            successful_payment_callback
             )
         )
 

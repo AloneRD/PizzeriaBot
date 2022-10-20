@@ -10,7 +10,10 @@ from geo_distance import calculate_distances, CalculateDistanceError
 
 from telegram.ext import Filters, Updater
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
-from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, PreCheckoutQueryHandler
+from telegram.ext import CallbackQueryHandler,\
+                         CommandHandler,\
+                         MessageHandler,\
+                         PreCheckoutQueryHandler
 
 _database = None
 
@@ -169,7 +172,9 @@ def handle_menu(bot, update, user_data, client_id, client_secret):
                 )
         return "HANDLE_MENU"
     elif user_reply == 'back' or user_reply == 'handle_menu':
-        keyboard = generate_keyboard_for_handle_menu(products[:MENU_ITEMS_NUMBER])
+        keyboard = generate_keyboard_for_handle_menu(
+            products[:MENU_ITEMS_NUMBER]
+            )
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -508,9 +513,8 @@ def pay(bot, update, user_data, job_queue, provider_pay_token, client_id, client
     currency = "RUB"
     title = "Order payment"
     description = f"User order payment {chat_id}"
-    payload = f"Custom-Payload"
+    payload = "Custom-Payload"
     start_parameter = "test-payment"
-
 
     bot.sendInvoice(
         chat_id,

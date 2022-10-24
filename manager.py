@@ -8,8 +8,6 @@ from api import create_product, create_flow, fill_fields
 
 def load_menu_to_cms(client_id: str, client_secret: str, menu: list):
     for menu_item in menu:
-        print(menu_item['name'])
-        print(menu_item['id'])
         create_product(client_id, client_secret, menu_item)
 
 

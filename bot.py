@@ -534,7 +534,6 @@ def pay(bot, update, user_data, job_queue, provider_pay_token, client_id, client
 def precheckout_callback(bot, update):
     query = update.pre_checkout_query
     # check the payload, is this from your bot?
-    print(query.invoice_payload)
     if query.invoice_payload != 'Custom-Payload':
         # answer False pre_checkout_query
         bot.answer_pre_checkout_query(pre_checkout_query_id=query.id, ok=False,

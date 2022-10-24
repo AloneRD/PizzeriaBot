@@ -174,7 +174,6 @@ def fill_fields(client_id: str, client_secret: str, data_items: list, flow_slug:
                 'Latitude': float(data_item['coordinates']['lat'])
             }
         }
-        print(json_data)
         response_field_fill = requests.post(
             f'https://api.moltin.com/v2/flows/{flow_slug}/entries',
             headers=headers,
@@ -192,7 +191,6 @@ def get_products(client_id: str, client_secret: str) -> dict:
         headers=headers
         )
     response_products.raise_for_status()
-    print(response_products)
     return response_products.json()
 
 
@@ -236,7 +234,6 @@ def add_product_cart(product: dict, client_id: str, client_secret: str, quantity
         headers=headers,
         json=json_data
         )
-    print(response_add_product_to_cart.json())
     response_add_product_to_cart.raise_for_status()
 
 
@@ -271,7 +268,6 @@ def remove_cart(cart_id: str, client_id: str, client_secret: str):
         f'https://api.moltin.com/v2/carts/{cart_id}_pizzeria/items',
         headers=headers
         )
-    print(response_remove_cart)
     response_remove_cart.raise_for_status()
 
 
